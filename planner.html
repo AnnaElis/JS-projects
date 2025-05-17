@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Умные карточки</title>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Jost', sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        #cards-container {
+            position: relative;
+            min-height: 80vh;
+            margin-top: 20px;
+        }
+        .card {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            background: #fff;
+            border: 1px solid #c6c6c6;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Jost', sans-serif;
+            user-select: none;
+        }
+        .card:active {
+            cursor: grabbing;
+        }
+        .card.focused {
+            outline: 2px solid #f97316;
+        }
+        .card-content {
+            flex-grow: 1;
+            outline: none;
+            overflow: auto;
+            font-family: inherit;
+            margin-bottom: 10px;
+            cursor: move;
+        }
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+        .color-menu-btn {
+            position: absolute;
+            left: -8px;
+            bottom: -8px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border: 1px solid #c6c6c6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 2;
+        }
+        .color-palette {
+            position: absolute;
+            left: 0;
+            bottom: -72px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            display: none;
+            flex-wrap: wrap;
+            gap: 6px;
+            width: 120px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .color-palette.visible {
+            display: flex;
+        }
+        .color-option {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 1px solid #eee;
+            transition: transform 0.2s;
+        }
+        .color-option:hover {
+            transform: scale(1.2);
+        }
+        .priority-circle {
+            position: absolute;
+            right: -8px;
+            bottom: -8px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #f97316;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #f97316;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 2;
+        }
+        .priority-input {
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            border: none;
+            background: transparent;
+            color: #f97316;
+            font-weight: 600;
+            font-family: 'Jost', sans-serif;
+            outline: none;
+            cursor: pointer;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: 'Jost', sans-serif;
+            transition: all 0.2s;
+        }
+        .btn-add {
+            background: #f97316;
+            color: white;
+        }
+        .btn-add:hover {
+            background: #e65c0d;
+        }
+        .btn-save {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-save:hover {
+            background: #2563eb;
+        }
+        .btn-reset {
+            background: #e2e8f0;
+        }
+        .btn-reset:hover {
+            background: #cbd5e1;
+        }
+        .btn-export {
+            background: #10b981;
+            color: white;
+        }
+        .btn-export:hover {
+            background: #0d9e6e;
+        }
+        .hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .hint.visible {
+            opacity: 1;
+        }
+        .context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+        }
+        .context-menu-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .context-menu-item:hover {
+            background: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button class="btn btn-add" id="addCard">+ Новая карточка</button>
+        <button class="btn btn-save" id="saveBtn">💾 Сохранить</button>
+        <button class="btn btn-reset" id="resetBtn">🔄 Сбросить</button>
+        <button class="btn btn-export" id="exportBtn">📷 Экспорт PNG</button>
+    </div>
+    <div id="cards-container"></div>
+    <div class="hint" id="hint"></div>
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" id="copyMenuItem">Копировать</div>
+        <div class="context-menu-item" id="pasteMenuItem">Вставить</div>
+        <div class="context-menu-item" id="deleteMenuItem">Удалить</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('cards-container');
+            const hint = document.getElementById('hint');
+            const contextMenu = document.getElementById('contextMenu');
+            const copyMenuItem = document.getElementById('copyMenuItem');
+            const pasteMenuItem = document.getElementById('pasteMenuItem');
+            const deleteMenuItem = document.getElementById('deleteMenuItem');
+            
+            let selectedCard = null;
+            let copiedCardData = null;
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+            let contextMenuCard = null;
+            
+            // Предустановленные цвета
+            const presetColors = [
+                '#ffffff', '#62bb35', '#fd817d', '#208ea3', 
+                '#fdae33', '#8d9f9b', '#fca7e4', '#4178bc',
+                '#a4c61a', '#7a71f6', '#e37cff', '#78eeef',
+                '#78efcf', '#97ef78', '#c9ef78', '#ef9a78',
+                '#eecc16'
+            ];
+            
+            // Загрузка сохранённых карточек
+            loadCards();
+            
+            // Добавление новой карточки
+            document.getElementById('addCard').addEventListener('click', function() {
+                createCard({
+                    x: Math.random() * (window.innerWidth - 180),
+                    y: Math.random() * (window.innerHeight - 180),
+                    color: '#ffffff',
+                    text: 'Новая задача',
+                    priority: ''
+                });
+            });
+            
+            // Сохранение карточек
+            document.getElementById('saveBtn').addEventListener('click', saveCards);
+            
+            // Сброс карточек
+            document.getElementById('resetBtn').addEventListener('click', function() {
+                if(confirm('Удалить все карточки?')) {
+                    localStorage.removeItem('saved-cards');
+                    container.innerHTML = '';
+                    showHint('Все карточки удалены');
+                }
+            });
+            
+            // Экспорт в PNG
+            document.getElementById('exportBtn').addEventListener('click', exportToPNG);
+            
+            // Контекстное меню
+            copyMenuItem.addEventListener('click', function() {
+                if (contextMenuCard) {
+                    copiedCardData = getCardData(contextMenuCard);
+                    showHint('Карточка скопирована');
+                }
+                contextMenu.style.display = 'none';
+            });
+            
+            pasteMenuItem.addEventListener('click', function() {
+                if (copiedCardData) {
+                    createCard({
+                        ...copiedCardData,
+                        x: copiedCardData.x + 20,
+                        y: copiedCardData.y + 20
+                    });
+                }
+                contextMenu.style.display = 'none';
+            });
+            
+            deleteMenuItem.addEventListener('click', function() {
+                if (contextMenuCard) {
+                    contextMenuCard.remove();
+                    saveCards();
+                    showHint('Карточка удалена');
+                }
+                contextMenu.style.display = 'none';
+            });
+            
+            // Закрытие контекстного меню при клике вне
+            document.addEventListener('click', function() {
+                contextMenu.style.display = 'none';
+            });
+            
+            // Управление с клавиатуры (работает на любой раскладке)
+            document.addEventListener('keydown', function(e) {
+                // Копирование карточки (Ctrl+C или Command+C)
+                if ((e.ctrlKey || e.metaKey) && e.keyCode === 67 && selectedCard) {
+                    copiedCardData = getCardData(selectedCard);
+                    showHint('Карточка скопирована (Ctrl+V для вставки)');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Вставка карточки (Ctrl+V или Command+V)
+                if ((e.ctrlKey || e.metaKey) && e.keyCode === 86 && copiedCardData) {
+                    createCard({
+                        ...copiedCardData,
+                        x: copiedCardData.x + 20,
+                        y: copiedCardData.y + 20
+                    });
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Удаление карточки (Delete)
+                if (e.key === 'Delete' && selectedCard) {
+                    selectedCard.remove();
+                    saveCards();
+                    showHint('Карточка удалена');
+                }
+            });
+            
+            // Контекстное меню по правой кнопке мыши
+            document.addEventListener('contextmenu', function(e) {
+                const card = e.target.closest('.card');
+                if (card) {
+                    e.preventDefault();
+                    contextMenuCard = card;
+                    contextMenu.style.display = 'block';
+                    contextMenu.style.left = e.pageX + 'px';
+                    contextMenu.style.top = e.pageY + 'px';
+                    
+                    // Показываем/скрываем пункты меню
+                    pasteMenuItem.style.display = copiedCardData ? 'block' : 'none';
+                }
+            });
+            
+            // Клик по карточке для выделения
+            document.addEventListener('click', function(e) {
+                const clickedCard = e.target.closest('.card');
+                
+                // Снимаем выделение со всех карточек
+                document.querySelectorAll('.card').forEach(card => {
+                    card.classList.remove('focused');
+                });
+                
+                // Если кликнули по карточке - выделяем её
+                if (clickedCard) {
+                    selectedCard = clickedCard;
+                    clickedCard.classList.add('focused');
+                    e.stopPropagation();
+                } else {
+                    selectedCard = null;
+                }
+            });
+            
+            // Создание карточки
+            function createCard(data) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.style.left = data.x + 'px';
+                card.style.top = data.y + 'px';
+                card.style.backgroundColor = data.color;
+                
+                card.innerHTML = `
+                    <div class="card-content" contenteditable="true">${data.text}</div>
+                    <div class="card-footer">
+                        <div class="color-menu-btn">⋯</div>
+                        <div class="color-palette"></div>
+                        <div class="priority-circle">
+                            <input type="text" class="priority-input" maxlength="2" value="${data.priority}" placeholder="1">
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(card);
+                setupCard(card, data.color);
+                return card;
+            }
+            
+            // Настройка карточки
+            function setupCard(card, initialColor) {
+                const colorBtn = card.querySelector('.color-menu-btn');
+                const colorPalette = card.querySelector('.color-palette');
+                
+                // Добавляем варианты цветов
+                presetColors.forEach(color => {
+                    const colorOption = document.createElement('div');
+                    colorOption.className = 'color-option';
+                    colorOption.style.backgroundColor = color;
+                    
+                    colorOption.addEventListener('click', function() {
+                        card.style.backgroundColor = color;
+                        saveCards();
+                        colorPalette.classList.remove('visible');
+                    });
+                    
+                    colorPalette.appendChild(colorOption);
+                });
+                
+                // Открытие/закрытие палитры
+                colorBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    colorPalette.classList.toggle('visible');
+                });
+                
+                // Закрытие палитры при клике вне
+                document.addEventListener('click', function(e) {
+                    if (!card.contains(e.target)) {
+                        colorPalette.classList.remove('visible');
+                    }
+                });
+                
+                // Перетаскивание карточки
+                card.addEventListener('mousedown', function(e) {
+                    // Исключаем только priority-input
+                    if (e.target.classList.contains('priority-input')) {
+                        return;
+                    }
+                    
+                    // Для contenteditable разрешаем перетаскивание
+                    if (e.target.contentEditable === 'true') {
+                        e.preventDefault();
+                    }
+                    
+                    selectedCard = card;
+                    card.classList.add('focused');
+                    card.style.zIndex = 1000;
+                    document.querySelectorAll('.card').forEach(c => {
+                        if(c !== card) c.style.zIndex = 1;
+                    });
+                    
+                    // Начало перетаскивания
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    initialX = parseInt(card.style.left);
+                    initialY = parseInt(card.style.top);
+                });
+                
+                // Приоритет
+                const priorityInput = card.querySelector('.priority-input');
+                priorityInput.addEventListener('change', saveCards);
+                priorityInput.addEventListener('input', function() {
+                    // Оставляем только цифры
+                    this.value = this.value.replace(/\D/g, '');
+                });
+                
+                // Двойной клик по тексту для редактирования
+                const content = card.querySelector('.card-content');
+                content.addEventListener('dblclick', function(e) {
+                    e.stopPropagation();
+                    const range = document.createRange();
+                    range.selectNodeContents(this);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                });
+            }
+            
+            // Перетаскивание карточек
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging || !selectedCard) return;
+                
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                
+                selectedCard.style.left = (initialX + dx) + 'px';
+                selectedCard.style.top = (initialY + dy) + 'px';
+            });
+            
+            document.addEventListener('mouseup', function() {
+                if (isDragging) {
+                    isDragging = false;
+                    saveCards();
+                }
+            });
+            
+            // Получение данных карточки
+            function getCardData(card) {
+                return {
+                    x: parseInt(card.style.left),
+                    y: parseInt(card.style.top),
+                    color: card.style.backgroundColor,
+                    text: card.querySelector('.card-content').innerText,
+                    priority: card.querySelector('.priority-input').value
+                };
+            }
+            
+            // Сохранение всех карточек
+            function saveCards() {
+                const cards = [];
+                document.querySelectorAll('.card').forEach(card => {
+                    cards.push(getCardData(card));
+                });
+                localStorage.setItem('saved-cards', JSON.stringify(cards));
+            }
+            
+            // Загрузка карточек
+            function loadCards() {
+                const savedCards = localStorage.getItem('saved-cards');
+                if(savedCards) {
+                    JSON.parse(savedCards).forEach(cardData => {
+                        createCard(cardData);
+                    });
+                }
+            }
+            
+            // Экспорт в PNG
+            function exportToPNG() {
+                showHint('Идёт создание изображения...');
+                
+                // Скрываем кнопки на время экспорта
+                const controls = document.querySelector('.controls');
+                controls.style.opacity = '0';
+                
+                html2canvas(container, {
+                    backgroundColor: '#f5f5f5',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true,
+                    scrollX: 0,
+                    scrollY: 0,
+                    windowWidth: document.documentElement.scrollWidth,
+                    windowHeight: document.documentElement.scrollHeight
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'карточки-' + new Date().toISOString().slice(0, 10) + '.png';
+                    link.href = canvas.toDataURL('image/png', 1.0);
+                    link.click();
+                    
+                    controls.style.opacity = '1';
+                    showHint('Изображение сохранено!');
+                });
+            }
+            
+            // Показать подсказку
+            function showHint(text) {
+                hint.textContent = text;
+                hint.classList.add('visible');
+                setTimeout(() => hint.classList.remove('visible'), 3000);
+            }
+        });
+    </script>
+</body>
+</html>
